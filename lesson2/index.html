@@ -766,7 +766,7 @@ function renderTeacher() {
   app.innerHTML = `<section>
     <div class="row" style="justify-content:space-between;margin-bottom:10px">
       <div><p class="eyebrow">Панель преподавателя</p><h2 style="font-size:28px">Урок 2. ${LESSON.title}</h2></div>
-      <span class="row"><a href="#lesson">Открыть урок как студент</a><button class="btn ghost" id="logout" style="padding:7px 14px">Выйти</button></span>
+      <span class="row"><a href="../teacher/">Журнал всех уроков</a><a href="#lesson">Открыть урок как студент</a><button class="btn ghost" id="logout" style="padding:7px 14px">Выйти</button></span>
     </div>
     <div class="tabs" role="tablist">
       ${[["plan", "План занятия (90 мин)"], ["slides", "Слайды и шпаргалка"], ["results", "Результаты"], ["practice", "Практика: что проверять"]].map(([k, l]) =>
@@ -844,7 +844,10 @@ async function loadSheet() {
     const r = await fetch(SHEET_URL + "?lesson=" + LESSON.id + "&key=" + encodeURIComponent(key));
     const j = await r.json();
     if (!j.ok) { sheetErr = j.error || "error"; return; }
-    sheetErr = ""; sheetRows = j.rows; results = j.rows;
+    /* one record per student: the latest row wins (duplicates in the sheet do not change the statistics) */
+    const latest = new Map(), nk = r => (String(r.name) + "|" + String(r.group)).toLowerCase().replace(/\s+/g, " ").trim();
+    for (const r of j.rows) { const k = nk(r), o = latest.get(k); if (!o || new Date(r.updatedAt) >= new Date(o.updatedAt)) latest.set(k, r); }
+    sheetErr = ""; sheetRows = [...latest.values()]; results = sheetRows;
   } catch (e) { sheetErr = "network"; }
 }
 function tResults() {
