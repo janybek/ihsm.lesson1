@@ -513,6 +513,8 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;"
 let DB = null, USER = null, UID = null, IS_OWNER = false, SAVE_STATE = "pending";
 /* teacher access outside claude.ai: a PIN (only keeps casual visitors out — the page source is public) */
 const PIN_HASH = "6105baf5e22f18623c5be2a517bc94206ee53fa8a32e0e67b5a949739be99120";
+/* Google Sheet web app that collects results (Apps Script). Empty = no automatic collection. */
+const SHEET_URL = "";
 let IS_TEACHER = false;
 try { IS_TEACHER = localStorage.getItem("inf-teacher") === PIN_HASH; } catch (e) {}
 async function sha(s) { const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, "0")).join(""); }
@@ -523,7 +525,7 @@ async function sha(s) { const b = await crypto.subtle.digest("SHA-256", new Text
     if (USER) UID = await USER.id();
     DB = await window.claude?.use?.("db");
   } catch (e) { DB = null; }
-  if (!DB || !UID) SAVE_STATE = "offline";
+  if ((!DB || !UID) && !SHEET_URL) SAVE_STATE = "offline";
   if (IS_OWNER) IS_TEACHER = true;
   document.getElementById("teacherLink").hidden = !IS_TEACHER;
   route();
@@ -680,6 +682,7 @@ function viewQuiz() {
     if (pass) document.getElementById("toPractice").onclick = () => { S.step = 3; save(); renderStudent(); };
     else {
       document.getElementById("review").onclick = () => { S.checked = false; S.step = 1; S.slide = (wrongSlides[0] || 1) - 1; save(); renderStudent(); };
+      if (S.submitted) document.getElementById("retry").hidden = true;
       document.getElementById("retry").onclick = () => { S.checked = false; S.answers = {}; save(); viewQuiz(); window.scrollTo(0, 0); };
     }
   }
@@ -715,10 +718,17 @@ function viewFinish() {
     <div class="row"><button class="btn" id="send">Send to my teacher</button><span class="note" id="sendMsg"></span></div>
     <div id="cardBox"></div>
   </section>`;
+  if (S.submitted) {
+    document.getElementById("send").hidden = true;
+    document.getElementById("refl").disabled = true;
+    document.getElementById("sendMsg").textContent = "Already sent. Your result can be sent only once.";
+  }
   document.getElementById("send").onclick = async () => {
+    if (S.submitted) return;
     S.reflection = document.getElementById("refl").value.trim(); S.submitted = true; S.code = makeCode(); save();
     const ok = await pushResult();
-    document.getElementById("sendMsg").textContent = ok ? "Sent. Your teacher can see your result." : "";
+    document.getElementById("send").hidden = true; document.getElementById("refl").disabled = true;
+    document.getElementById("sendMsg").textContent = S.locked ? "This result was already sent earlier — it can be sent only once." : ok ? "Sent. Your teacher can see your result." : "";
     showCard(ok);
   };
   if (S.submitted) showCard(SAVE_STATE === "saved");
@@ -736,13 +746,21 @@ function showCard(saved) {
 }
 
 async function pushResult() {
-  if (!DB || !UID || !S.name) { SAVE_STATE = "offline"; return false; }
+  if (!S.name || ((!DB || !UID) && !SHEET_URL)) { SAVE_STATE = "offline"; return false; }
   const body = { lesson: LESSON.id, name: S.name.slice(0, 120), group: S.group.slice(0, 40), level: S.level, self: S.self,
     step: S.step, score: S.score, best: S.best || 0, attempts: S.attempts, answers: S.answers,
     practice: Object.keys(S.done).filter(k => S.done[k]), reflection: S.reflection.slice(0, 2000), submitted: S.submitted,
-    updatedAt: new Date().toISOString() };
-  try { await DB.doc("results/" + UID).set(body); SAVE_STATE = "saved"; return true; }
-  catch (e) { SAVE_STATE = "offline"; return false; }
+    code: S.code || makeCode(), updatedAt: new Date().toISOString() };
+  if (DB && UID) {
+    try { await DB.doc("results/" + UID).set(body); SAVE_STATE = "saved"; return true; }
+    catch (e) { SAVE_STATE = "offline"; return false; }
+  }
+  try {
+    const r = await fetch(SHEET_URL, { method: "POST", body: JSON.stringify(body) });
+    const j = await r.json();
+    if (j.error === "already submitted") { S.submitted = true; S.locked = true; save(); SAVE_STATE = "saved"; return true; }
+    SAVE_STATE = j.ok ? "saved" : "offline"; return !!j.ok;
+  } catch (e) { SAVE_STATE = "offline"; return false; }
 }
 
 /* ======================= TEACHER VIEW ======================= */
@@ -759,7 +777,7 @@ function renderTeacher() {
     const go = async () => {
       const h = await sha("ihsm-inf:" + document.getElementById("pin").value.trim());
       if (h !== PIN_HASH) { document.getElementById("pinMsg").textContent = "Неверный PIN."; return; }
-      IS_TEACHER = true; try { localStorage.setItem("inf-teacher", PIN_HASH); } catch (e) {}
+      IS_TEACHER = true; try { localStorage.setItem("inf-teacher", PIN_HASH); localStorage.setItem("inf-teacher-key", document.getElementById("pin").value.trim()); } catch (e) {}
       document.getElementById("teacherLink").hidden = false; renderTeacher();
     };
     document.getElementById("pinGo").onclick = go;
@@ -778,7 +796,7 @@ function renderTeacher() {
     <div id="tBody"></div>
   </section>`;
   app.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => { tTab = b.dataset.tab; renderTeacher(); });
-  document.getElementById("logout").onclick = () => { try { localStorage.removeItem("inf-teacher"); } catch (e) {} IS_TEACHER = IS_OWNER; document.getElementById("teacherLink").hidden = !IS_TEACHER; location.hash = "#lesson"; };
+  document.getElementById("logout").onclick = () => { try { localStorage.removeItem("inf-teacher"); localStorage.removeItem("inf-teacher-key"); } catch (e) {} sheetRows = null; IS_TEACHER = IS_OWNER; document.getElementById("teacherLink").hidden = !IS_TEACHER; location.hash = "#lesson"; };
   ({ plan: tPlan, slides: tSlides, results: tResults, practice: tPractice })[tTab]();
   subscribeResults();
 }
@@ -839,9 +857,33 @@ function subscribeResults() {
   } catch (e) { unsub = null; }
 }
 
+let sheetRows = null, sheetErr = "";
+async function loadSheet() {
+  let key = ""; try { key = localStorage.getItem("inf-teacher-key") || ""; } catch (e) {}
+  if (!key) { sheetErr = "nokey"; return; }
+  try {
+    const r = await fetch(SHEET_URL + "?lesson=" + LESSON.id + "&key=" + encodeURIComponent(key));
+    const j = await r.json();
+    if (!j.ok) { sheetErr = j.error || "error"; return; }
+    sheetErr = ""; sheetRows = j.rows; results = j.rows;
+  } catch (e) { sheetErr = "network"; }
+}
 function tResults() {
   const b = document.getElementById("tBody");
-  if (!DB) {
+  if (!DB && SHEET_URL && sheetRows === null) {
+    if (sheetErr === "nokey" || sheetErr === "wrong key") {
+      b.innerHTML = `<div class="sheet stack" style="max-width:520px"><p>Чтобы загрузить результаты из Google Таблицы, введите PIN ещё раз.</p>
+        <label class="field" for="pin2">PIN-код<input type="password" id="pin2" inputmode="numeric"></label>
+        <div class="row"><button class="btn" id="pin2Go">Загрузить</button></div></div>`;
+      document.getElementById("pin2Go").onclick = () => { try { localStorage.setItem("inf-teacher-key", document.getElementById("pin2").value.trim()); } catch (e) {} sheetErr = ""; tResults(); };
+      return;
+    }
+    if (sheetErr === "network") { b.innerHTML = `<div class="banner bad">Не удалось связаться с Google Таблицей. Проверьте интернет и нажмите вкладку «Результаты» ещё раз.</div>`; sheetErr = ""; return; }
+    b.innerHTML = `<p class="note">Загружаю результаты из Google Таблицы…</p>`;
+    loadSheet().then(() => { if (tTab === "results" && location.hash === "#teacher") tResults(); });
+    return;
+  }
+  if (!DB && !SHEET_URL) {
     b.innerHTML = `<div class="stack">
       <div class="banner warn">На этом сайте результаты не собираются автоматически. В конце урока студент получает <b>карточку результата</b> с проверочным кодом и показывает её вам или присылает скриншот.</div>
       <div class="sheet stack"><p class="eyebrow">Проверка карточки студента</p>
@@ -872,7 +914,7 @@ function tResults() {
   });
   const hard = perQ.filter(x => x.pct !== null).sort((a, b) => a.pct - b.pct).slice(0, 3);
   b.innerHTML = `<div class="stack">
-    <div class="row"><label class="field" for="gF" style="min-width:200px">Группа<select id="gF"><option value="">Все группы</option>${groups.map(g => `<option ${g === groupFilter ? "selected" : ""}>${esc(g)}</option>`).join("")}</select></label></div>
+    <div class="row" style="align-items:end"><label class="field" for="gF" style="min-width:200px">Группа<select id="gF"><option value="">Все группы</option>${groups.map(g => `<option ${g === groupFilter ? "selected" : ""}>${esc(g)}</option>`).join("")}</select></label>${SHEET_URL && !DB ? `<button class="btn ghost" id="reload">Обновить</button><span class="note">Данные из вашей Google Таблицы</span>` : ""}</div>
     <div class="stats">
       <div class="stat"><span class="note">Начали урок</span><b>${rs.length}</b></div>
       <div class="stat"><span class="note">Прошли тест</span><b>${tested.length}</b></div>
@@ -890,6 +932,7 @@ function tResults() {
     </div>
   </div>`;
   document.getElementById("gF").onchange = e => { groupFilter = e.target.value; tResults(); };
+  const rl = document.getElementById("reload"); if (rl) rl.onclick = () => { sheetRows = null; tResults(); };
   const tbl = document.getElementById("resTable");
   if (tbl) rs.slice().sort((a, b) => String(a.name).localeCompare(String(b.name))).forEach(r => {
     const tr = document.createElement("tr");
