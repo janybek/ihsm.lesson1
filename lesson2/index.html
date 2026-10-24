@@ -163,6 +163,7 @@ table.ext td, table.ext th { border-bottom: 1px solid var(--line); padding: 9px 
 .task { display: grid; gap: 4px; }
 .level { display: inline-block; font: 600 12px/1 var(--f-body); letter-spacing: .08em; text-transform: uppercase; padding: 6px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); vertical-align: middle; }
 .card { border: 2px dashed var(--accent); border-radius: var(--r); padding: 20px; display: grid; gap: 6px; }
+details.faq summary { cursor: pointer; }
 .card .code { font: 700 24px/1 var(--f-mono); letter-spacing: .14em; }
 
 /* teacher */
@@ -450,6 +451,9 @@ const PRACTICE = {
   ]
 };
 
+/* Questions from students with the teacher's answers (shown on the Finish screen) */
+const FAQ = [];
+
 /* ======================= TEACHER CONTENT ======================= */
 const CLASS_PLAN = [
  { from: 0, to: 5, title: "Организационная часть", body: "Отметьте присутствующих. Проверьте, у всех ли есть аккаунт Google и телефон под рукой (нужен для 2FA). Спросите, кто прошёл онлайн-урок 2.",
@@ -689,14 +693,22 @@ function codeFor(name, group, score) {
   return (h.toString(36).toUpperCase() + "000000").slice(0, 6);
 }
 
+
+function faqHTML() {
+  if (!FAQ.length) return "";
+  return `<section class="sheet stack"><p class="eyebrow">Your questions — answered</p>
+    <h2 style="font-size:clamp(22px,3.2vw,30px)">Questions from students</h2>
+    ${FAQ.map(f => `<details class="faq" open><summary><b>${esc(f.q)}</b></summary><div class="stack" style="gap:10px;margin-top:10px">${f.a.map(p => `<p>${p}</p>`).join("")}</div></details>`).join("")}
+  </section>`;
+}
 function viewFinish() {
-  app.innerHTML = `<section class="sheet stack">
+  app.innerHTML = `<section class="stack"><section class="sheet stack">
     <p class="eyebrow">Finish</p>
     <h2 style="font-size:clamp(24px,3.6vw,34px)">One last question</h2>
     <label class="field" for="refl">What was difficult or unclear in this lesson?<textarea id="refl" placeholder="For example: I did not understand the difference between cloud and local storage.">${esc(S.reflection)}</textarea></label>
     <div class="row"><button class="btn" id="send">Send to my teacher</button><span class="note" id="sendMsg"></span></div>
     <div id="cardBox"></div>
-  </section>`;
+  </section>${faqHTML()}</section>`;
   if (S.submitted) {
     document.getElementById("send").hidden = true;
     document.getElementById("refl").disabled = true;
@@ -706,11 +718,12 @@ function viewFinish() {
     if (S.submitted) return;
     S.reflection = document.getElementById("refl").value.trim(); S.submitted = true; S.code = makeCode(); save();
     const ok = await pushResult();
+    if (ok) { S.sent = true; save(); }
     document.getElementById("send").hidden = true; document.getElementById("refl").disabled = true;
     document.getElementById("sendMsg").textContent = S.locked ? "This result was already sent earlier — it can be sent only once." : ok ? "Sent. Your teacher can see your result." : "";
     showCard(ok);
   };
-  if (S.submitted) showCard(SAVE_STATE === "saved");
+  if (S.submitted) showCard(S.sent || SAVE_STATE === "saved");
 }
 
 function showCard(saved) {

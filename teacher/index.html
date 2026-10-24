@@ -201,6 +201,7 @@ footer { margin-top: 40px; font-size: 13px; color: var(--muted); text-align: cen
 details summary { cursor: pointer; padding: 6px 0; }
 details[disabled] summary { color: var(--muted); }
 .stat:hover { transform: translateY(-2px); }
+.qbox { border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; display: grid; gap: 4px; }
 .sorter { border: 0; background: none; padding: 0; font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
 .sorter:hover { color: var(--accent); }
 tr.gsep td { background: var(--bg); font-weight: 600; color: var(--accent); font-size: 13px; letter-spacing: .04em; }
@@ -294,6 +295,15 @@ function students() {
   return [...map.values()].sort((a, b) => a.group.localeCompare(b.group, undefined, { numeric: true }) || a.name.localeCompare(b.name));
 }
 
+
+/* a comment is a question if it asks something or names a difficulty — not "Nothing", "Thank you", "All clear" */
+function isQuestion(t) {
+  t = String(t || "").trim().toLowerCase();
+  if (t.length < 8) return false;
+  if (/^(nothing|no|none|nope|thank|thanks|all (was )?clear|everything (was |is )?clear|ok|good|great|nice|very good)\b/.test(t) && !t.includes("?")) return false;
+  return t.includes("?") || /\b(why|how|what|which|when|where|explain|difficult|hard|unclear|confus|did not understand|didn't understand|don't understand|not understand|problem|could not|couldn't)\b/.test(t);
+}
+
 function status(r) {
   if (!r) return { cls: "", text: "—", tip: "не начинал" };
   const attempts = Number(r.attempts) || 0, best = Number(r.best) || 0;
@@ -338,10 +348,16 @@ function render() {
       <p class="note">✓ — студент нажал «Send»: результат окончательный. Зелёный — 70% и выше. Наведите на ячейку, чтобы увидеть попытки, уровень и практику.</p>`
       : `<p class="note">Пока нет результатов${group || query ? " по этому фильтру" : ""}. Они появятся, когда студенты начнут уроки.</p>`}
     </section>
-    <section class="sheet stack"><p class="eyebrow">Что было трудно — ответы студентов</p>
-      ${LESSONS.map(L => { const items = list.map(s => [s, s.lessons[L.id]]).filter(([, r]) => r && String(r.reflection || "").trim());
-        return `<details ${items.length ? "" : "disabled"}><summary><b>Урок ${L.n}</b> · ${items.length} ответ(ов)</summary>
-          <div class="stack" style="gap:8px;margin-top:10px">${items.map(([s, r]) => `<p><b>${esc(s.name)}</b> <span class="note">(гр. ${esc(s.group)})</span>: ${esc(r.reflection)}</p>`).join("") || '<p class="note">Нет ответов.</p>'}</div></details>`; }).join("")}
+    <section class="sheet stack"><p class="eyebrow">Вопросы студентов</p>
+      ${(() => { const qs = []; LESSONS.forEach(L => list.forEach(s => { const r = s.lessons[L.id]; if (r && isQuestion(r.reflection)) qs.push([L, s, r]); }));
+        return qs.length ? qs.map(([L, s, r]) => `<div class="qbox"><p class="note">Урок ${L.n} · <b>${esc(s.name)}</b> (гр. ${esc(s.group)})</p><p>${esc(r.reflection)}</p></div>`).join("")
+          : '<p class="note">Содержательных вопросов пока нет.</p>'; })()}
+      <p class="note">Сюда попадают комментарии с вопросом или с описанием трудности. Ответы на них можно добавить на страницу урока — тогда их увидят все студенты.</p>
+    </section>
+    <section class="sheet stack"><p class="eyebrow">Остальные отзывы</p>
+      ${LESSONS.map(L => { const items = list.map(s => [s, s.lessons[L.id]]).filter(([, r]) => r && String(r.reflection || "").trim() && !isQuestion(r.reflection));
+        return `<details><summary><b>Урок ${L.n}</b> · ${items.length} отзыв(ов)</summary>
+          <div class="stack" style="gap:8px;margin-top:10px">${items.map(([s, r]) => `<p><b>${esc(s.name)}</b> <span class="note">(гр. ${esc(s.group)})</span>: ${esc(r.reflection)}</p>`).join("") || '<p class="note">Нет отзывов.</p>'}</div></details>`; }).join("")}
     </section>
     <p class="note">Обновлено: ${loadedAt.toLocaleString("ru-RU")}. Подробный разбор вопросов урока — в панели урока (нажмите на карточку урока выше).</p>`;
   document.getElementById("g").onchange = e => { group = e.target.value; store.set("inf-journal-group", group); render(); };
