@@ -724,6 +724,8 @@ function viewFinish() {
     showCard(ok);
   };
   if (S.submitted) showCard(S.sent || SAVE_STATE === "saved");
+  /* finished before the results sheet was connected: send now (the sheet keeps only the first final result) */
+  if (S.submitted && !S.sent && SHEET_URL) pushResult().then(ok => { if (ok) { S.sent = true; save(); if (S.step === 4 && location.hash !== "#teacher") showCard(true); } });
 }
 
 function showCard(saved) {
