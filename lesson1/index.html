@@ -937,7 +937,7 @@ function tResults() {
   document.getElementById("gF").onchange = e => { groupFilter = e.target.value; tResults(); };
   const rl = document.getElementById("reload"); if (rl) rl.onclick = () => { sheetRows = null; tResults(); };
   const tbl = document.getElementById("resTable");
-  if (tbl) rs.slice().sort((a, b) => String(a.name).localeCompare(String(b.name))).forEach(r => {
+  if (tbl) rs.slice().sort((a, b) => String(a.group).localeCompare(String(b.group), undefined, { numeric: true }) || String(a.name).localeCompare(String(b.name))).forEach(r => {
     const tr = document.createElement("tr");
     const cells = [r.name, r.group, r.level, STEPS[r.step] || "", r.attempts ? (r.best || 0) + "%" : "—", r.attempts || 0, (r.practice || []).length, r.reflection || ""];
     cells.forEach((v, k) => { const td = document.createElement("td"); if (k === 4 && r.attempts) { const s = document.createElement("span"); s.className = "pill " + ((r.best || 0) >= LESSON.pass ? "ok" : "bad"); s.textContent = v; td.append(s); } else td.textContent = v; tr.append(td); });

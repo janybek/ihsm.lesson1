@@ -201,6 +201,9 @@ footer { margin-top: 40px; font-size: 13px; color: var(--muted); text-align: cen
 details summary { cursor: pointer; padding: 6px 0; }
 details[disabled] summary { color: var(--muted); }
 .stat:hover { transform: translateY(-2px); }
+.sorter { border: 0; background: none; padding: 0; font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
+.sorter:hover { color: var(--accent); }
+tr.gsep td { background: var(--bg); font-weight: 600; color: var(--accent); font-size: 13px; letter-spacing: .04em; }
 </style>
 </head>
 <body>
@@ -233,6 +236,20 @@ const store = { get: k => { try { return localStorage.getItem(k); } catch (e) { 
 async function sha(s) { const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, "0")).join(""); }
 
 let rows = [], loadedAt = null, group = store.get("inf-journal-group") || "", query = "";
+let sortBy = store.get("inf-journal-sort") || "group", sortDir = Number(store.get("inf-journal-dir")) || 1;
+const byGroup = (a, b) => a.group.localeCompare(b.group, undefined, { numeric: true }) || a.name.localeCompare(b.name);
+const passedCount = s => LESSONS.filter(L => { const r = s.lessons[L.id]; return r && Number(r.best) >= PASS; }).length;
+function sortList(list) {
+  const val = s => sortBy === "name" ? s.name.toLowerCase() : sortBy === "done" ? passedCount(s)
+    : sortBy.startsWith("L") ? (s.lessons[sortBy] ? Number(s.lessons[sortBy].best) || 0 : -1) : null;
+  return list.slice().sort((a, b) => {
+    if (sortBy === "group") return sortDir * byGroup(a, b);
+    const x = val(a), y = val(b);
+    const c = typeof x === "string" ? x.localeCompare(y) : x - y;
+    return sortDir * c || byGroup(a, b);
+  });
+}
+function setSort(k) { if (sortBy === k) sortDir = -sortDir; else { sortBy = k; sortDir = (k === "name" || k === "group") ? 1 : -1; } store.set("inf-journal-sort", sortBy); store.set("inf-journal-dir", String(sortDir)); render(); }
 
 function gate(msg = "") {
   document.getElementById("topActions").hidden = true;
@@ -289,7 +306,8 @@ function render() {
   const all = students();
   const groups = [...new Set(all.map(s => s.group))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   if (group && !groups.includes(group)) group = "";
-  const list = all.filter(s => (!group || s.group === group) && (!query || norm(s.name).includes(norm(query))));
+  const list = sortList(all.filter(s => (!group || s.group === group) && (!query || norm(s.name).includes(norm(query)))));
+  const th = (k, label, title = "") => `<th><button type="button" class="sorter" data-sort="${k}" title="${esc(title || "Сортировать")}">${label}${sortBy === k ? (sortDir > 0 ? " ▲" : " ▼") : ""}</button></th>`;
   const sum = LESSONS.map(L => {
     const rs = list.map(s => s.lessons[L.id]).filter(Boolean);
     const tested = rs.filter(r => Number(r.attempts) > 0);
@@ -302,6 +320,7 @@ function render() {
       <div><p class="eyebrow">Все уроки · ${list.length} студ.</p><h2 style="font-size:clamp(26px,4vw,36px)">Журнал онлайн-уроков</h2></div>
       <div class="row" style="align-items:end">
         <label class="field" for="g">Группа<select id="g"><option value="">Все группы</option>${groups.map(g => `<option ${g === group ? "selected" : ""}>${esc(g)}</option>`).join("")}</select></label>
+        <label class="field" for="sb">Сортировать по<select id="sb">${[["group", "группе"], ["name", "фамилии"], ...LESSONS.map(L => [L.id, "баллу за урок " + L.n]), ["done", "числу сданных уроков"]].map(([k, l]) => `<option value="${k}" ${k === sortBy ? "selected" : ""}>${l}</option>`).join("")}</select></label>
         <label class="field" for="q">Поиск студента<input type="text" id="q" value="${esc(query)}" placeholder="Фамилия или имя"></label>
         <button class="btn" id="csv">Скачать для Excel</button>
       </div>
@@ -311,8 +330,8 @@ function render() {
       <span class="note">сдали тест ${s.passed} из ${s.tested} · отправили ${s.submitted} · начали ${s.started}</span></a>`).join("")}</section>
     <section class="sheet stack">
       <p class="eyebrow">Студенты</p>
-      ${list.length ? `<div class="tblwrap"><table class="res"><tr><th>Студент</th><th>Группа</th>${LESSONS.map(L => `<th title="${esc(L.title)}">Урок ${L.n}</th>`).join("")}<th>Сдано уроков</th></tr>
-        ${list.map(s => `<tr><td><b>${esc(s.name)}</b></td><td>${esc(s.group)}</td>${LESSONS.map(L => { const st = status(s.lessons[L.id]);
+      ${list.length ? `<div class="tblwrap"><table class="res"><tr>${th("name", "Студент")}${th("group", "Группа")}${LESSONS.map(L => th(L.id, "Урок " + L.n, L.title)).join("")}${th("done", "Сдано уроков")}</tr>
+        ${list.map((s, i) => `${sortBy === "group" && (i === 0 || list[i - 1].group !== s.group) ? `<tr class="gsep"><td colspan="${LESSONS.length + 3}">Группа ${esc(s.group)} · ${list.filter(x => x.group === s.group).length} студ.</td></tr>` : ""}<tr><td><b>${esc(s.name)}</b></td><td>${esc(s.group)}</td>${LESSONS.map(L => { const st = status(s.lessons[L.id]);
           return `<td title="${esc(st.tip)}">${st.cls ? `<span class="pill ${st.cls}">${esc(st.text)}</span>` : `<span class="note">${esc(st.text)}</span>`}</td>`; }).join("")}
           <td>${LESSONS.filter(L => { const r = s.lessons[L.id]; return r && Number(r.best) >= PASS; }).length} / ${LESSONS.length}</td></tr>`).join("")}
       </table></div>
@@ -329,6 +348,8 @@ function render() {
   const q = document.getElementById("q");
   q.oninput = e => { query = e.target.value; const pos = q.selectionStart; render(); const nq = document.getElementById("q"); nq.focus(); nq.setSelectionRange(pos, pos); };
   document.getElementById("csv").onclick = () => exportCSV(list);
+  document.getElementById("sb").onchange = e => { sortBy = e.target.value; sortDir = (sortBy === "name" || sortBy === "group") ? 1 : -1; store.set("inf-journal-sort", sortBy); store.set("inf-journal-dir", String(sortDir)); render(); };
+  app.querySelectorAll(".sorter").forEach(b => b.onclick = () => setSort(b.dataset.sort));
 }
 
 function exportCSV(list) {
