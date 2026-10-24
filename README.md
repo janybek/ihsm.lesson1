@@ -2,4 +2,4 @@
 
 Online lessons of the course "Computer Science" for medical students of the International Higher School of Medicine (Bishkek).
 
-Site: https://janybek.github.io/informatics/
+Site: https://janybek.github.io/ihsm.lesson1/
