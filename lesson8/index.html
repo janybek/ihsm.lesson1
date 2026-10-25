@@ -249,7 +249,7 @@ const SLIDES = [
      <h2>Google Forms → Excel: your mini-study</h2>
      <p class="lead">Today you will finish the first part of your course project: a correct online survey, export of the answers to Excel, frequency tables and a correlation with a scatter plot.</p>
      <div class="tiles">
-       <div class="tile"><b>1. Slides</b><span class="note">11 slides with real screenshots.</span></div>
+       <div class="tile"><b>1. Slides</b><span class="note">11 slides with real screenshots of Google Forms and Excel.</span></div>
        <div class="tile"><b>2. Check yourself</b><span class="note">10 questions. You need ${70}% to open the practical task.</span></div>
        <div class="tile"><b>3. Practice in class</b><span class="note">Analyse your own survey answers.</span></div>
      </div>`,
@@ -259,18 +259,19 @@ const SLIDES = [
  { title: "Designing a survey",
    html: `<h2>Designing a survey in ${T("forms","Google Forms")}</h2>
      <div class="grid2">
-       ${SHOT("forms_help.png", "Google Docs Editors Help: How to use Google Forms, steps 1 to 4", "Google's official help (support.google.com): create, edit, send the form and analyse the responses.")}
+       ${SHOT("forms_types.png", "Google Forms question type menu: Short answer, Paragraph, Multiple choice, Checkboxes, Dropdown, Linear scale and others", "The question type menu next to each question.")}
        <ul>
          <li><b>forms.google.com → Blank form</b>. Title and a short introduction: aim, voluntary, anonymous.</li>
          <li>${T("mc","Multiple choice")} — one answer; <b>Checkboxes</b> — several.</li>
          <li>${T("scale","Linear scale")} — 0–10 for stress, pain, satisfaction.</li>
          <li><b>Short answer</b> with ${T("validation","response validation")} → Number between 0 and 24 (hours of sleep).</li>
-         <li><b>Send</b> → link icon → copy the link for your group chats.</li>
+         <li><b>Publish</b> → copy the link for your group chats.</li>
        </ul>
-     </div>`,
+     </div>
+     ${SHOT("forms_editor.png", "Google Forms editor with three questions: multiple choice, short answer and a linear scale from 0 to 10", "Our demo form: multiple choice (coffee), short answer with validation (sleep), linear scale 0–10 (stress).")}`,
    say: "A survey is a measuring instrument. If the question is bad, the answer is useless — like a broken thermometer.",
    ask: "Which question type do you use for “hours of sleep on a weekday”?",
-   tip: "Вопросы 1 и 2 теста. Покажите свою анкету в Google Forms вживую на проекторе.",
+   tip: "Вопросы 1 и 2 теста. Учебная форма «Sleep and Stress Survey (demo)» лежит на вашем Google Диске — покажите её вживую.",
    sec: 120 },
  { title: "Good questions",
    html: `<h2>Good and bad survey questions</h2>
@@ -282,7 +283,8 @@ const SLIDES = [
        <li>One question = one thing; give units and limits.</li>
        <li>Answer options do not overlap and cover all cases.</li>
        <li>No leading questions.</li>
-     </ul>`,
+     </ul>
+     ${SHOT("forms_validation.png", "Google Forms response validation: Number, Between 0 and 24, custom error text", "⋮ → Response validation: Number · Between · 0 and 24 · “Enter a number of hours from 0 to 24”.")}`,
    say: "Three typical mistakes: two questions in one, overlapping options, and questions that push the answer.",
    ask: "What is wrong with “0–2 / 2–4 cups”? (2 is in both options.)",
    tip: "Вопрос 3 теста." },
@@ -293,7 +295,8 @@ const SLIDES = [
        <li><b>Do not collect</b> names, phone numbers, e-mails or anything that identifies a person (Settings → do not collect e-mail addresses).</li>
        <li>Do not ask about diagnoses of real patients; ask about lifestyle of volunteers.</li>
        <li>Store the answers in your course folder only; delete them after the course if you do not need them.</li>
-     </ul>`,
+     </ul>
+     ${SHOT("forms_settings.png", "Google Forms Settings, Responses: Collect email addresses set to Do not collect", "Settings → Responses → Collect email addresses: <b>Do not collect</b>.")}`,
    say: "Even a small student survey follows research ethics: voluntary, informed and anonymous.",
    ask: "Why must the survey not collect e-mail addresses?",
    tip: "Вопрос 4 теста. Связь с уроком 14 (защита данных)." },
@@ -304,7 +307,8 @@ const SLIDES = [
        <li>In Google Sheets: <b>File → Download → Microsoft Excel (.xlsx)</b>.</li>
        <li>In Excel: delete Timestamp if not needed; rename headers to short names (Sleep_h, Coffee_cups, Stress_0_10).</li>
        <li>Check the data as in Lesson 5: filter each column, look for impossible values.</li>
-     </ol>`,
+     </ol>
+     ${SHOT("forms_responses.png", "Google Forms Responses tab with the Link to Sheets button", "Responses tab → <b>Link to Sheets</b>.")}`,
    say: "Forms → Sheets → Excel. Then clean the data as you learned in Lesson 5.",
    ask: "Which menu downloads a Google Sheet as an Excel file?",
    tip: "Вопрос 5 теста." },
