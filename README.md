@@ -1,5 +1,4 @@
-# Informatics · IHSM
+# Moved
 
-Online lessons of the course "Computer Science" for medical students of the International Higher School of Medicine (Bishkek).
-
-Site: https://janybek.github.io/ihsm.lesson1/
+The Informatics lessons now live at https://janybek.github.io/ (repository janybek/janybek.github.io).
+This repository only redirects old links.
